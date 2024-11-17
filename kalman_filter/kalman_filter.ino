@@ -1,9 +1,9 @@
 #include <Arduino_LSM9DS1.h> // LSM9DS1 라이브러리
 
 // 자기 센서 보정을 위한 변수
-float magX_min = -50, magX_max = 50;
-float magY_min = -50, magY_max = 50;
-float magZ_min = -50, magZ_max = 50;
+float magX_min = 9999, magX_max = -9999; // 초기값 설정
+float magY_min = 9999, magY_max = -9999;
+float magZ_min = 9999, magZ_max = -9999;
 
 // 칼만 필터용 구조체
 struct Kalman {
@@ -29,7 +29,7 @@ void initKalman(Kalman &kf) {
 // 칼만 필터 업데이트
 float updateKalman(Kalman &kf, float newAngle, float newRate, float dt) {
   float Q_angle = 0.01; // 프로세스 노이즈
-  float Q_bias = 0.003;  // 바이어스 노이즈
+  float Q_bias = 0.003; // 바이어스 노이즈
   float R_measure = 0.01; // 측정 노이즈
 
   // 예측 단계
@@ -76,6 +76,7 @@ void setup() {
   initKalman(kalmanPitch);
 
   Serial.println("IMU initialized.");
+  Serial.println("Move the sensor in all directions to calibrate magnetic field...");
 }
 
 void loop() {
@@ -91,6 +92,14 @@ void loop() {
     IMU.readAcceleration(ax, ay, az);
     IMU.readGyroscope(gx, gy, gz);
     IMU.readMagneticField(mx, my, mz);
+
+    // 보정값 갱신 (최소/최대값)
+    if (mx < magX_min) magX_min = mx;
+    if (mx > magX_max) magX_max = mx;
+    if (my < magY_min) magY_min = my;
+    if (my > magY_max) magY_max = my;
+    if (mz < magZ_min) magZ_min = mz;
+    if (mz > magZ_max) magZ_max = mz;
 
     // 가속도계로 계산한 Roll, Pitch
     float accelRoll = atan2(ay, az) * 180 / PI;
