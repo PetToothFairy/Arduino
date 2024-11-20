@@ -1,9 +1,14 @@
-#include <Arduino_LSM9DS1.h> // LSM9DS1 라이브러리
+#include <ArduinoBLE.h>       // BLE 라이브러리
+#include <Arduino_LSM9DS1.h>  // IMU 센서 라이브러리
+
+// BLE 서비스 및 특성 정의
+BLEService postureService("180A");  // 사용자 정의 BLE 서비스 UUID
+BLECharacteristic postureCharacteristic("2A19", BLERead | BLENotify, 20);  // Posture 특성 (최대 20바이트)
 
 // 자기 센서 보정을 위한 변수
-float magX_min = -50, magX_max = 50;
-float magY_min = -50, magY_max = 50;
-float magZ_min = -50, magZ_max = 50;
+float magX_min = 9999, magX_max = -9999; // 초기값 설정
+float magY_min = 9999, magY_max = -9999;
+float magZ_min = 9999, magZ_max = -9999;
 
 // 칼만 필터용 구조체
 struct Kalman {
@@ -28,7 +33,7 @@ void initKalman(Kalman &kf) {
 
 // 칼만 필터 업데이트
 float updateKalman(Kalman &kf, float newAngle, float newRate, float dt) {
-  float Q_angle = 0.01; // 프로세스 노이즈
+  float Q_angle = 0.01;  // 프로세스 노이즈
   float Q_bias = 0.003;  // 바이어스 노이즈
   float R_measure = 0.01; // 측정 노이즈
 
@@ -62,79 +67,96 @@ float updateKalman(Kalman &kf, float newAngle, float newRate, float dt) {
   return kf.angle;
 }
 
-// 센서 초기화
 void setup() {
   Serial.begin(9600);
   while (!Serial);
 
+  // IMU 초기화
   if (!IMU.begin()) {
     Serial.println("Failed to initialize IMU!");
     while (1);
   }
 
+  // BLE 초기화
+  if (!BLE.begin()) {
+    Serial.println("Failed to initialize BLE!");
+    while (1);
+  }
+
+  // BLE 장치 이름 및 서비스 설정
+  BLE.setLocalName("IMU_Posture_Device");
+  BLE.setAdvertisedService(postureService);
+  postureService.addCharacteristic(postureCharacteristic);
+  BLE.addService(postureService);
+
+  // BLE 광고 시작
+  BLE.advertise();
+  Serial.println("BLE advertising started...");
+
   initKalman(kalmanRoll);
   initKalman(kalmanPitch);
-
-  Serial.println("IMU initialized.");
 }
 
 void loop() {
-  static unsigned long prevTime = 0;
-  unsigned long currentTime = millis();
-  float dt = (currentTime - prevTime) / 1000.0; // 초 단위로 시간 계산
-  prevTime = currentTime;
+  // BLE 연결 확인
+  BLEDevice central = BLE.central();
 
-  float ax, ay, az, gx, gy, gz, mx, my, mz;
+  if (central) {
+    Serial.println("BLE device connected!");
 
-  // IMU 데이터 읽기
-  if (IMU.accelerationAvailable() && IMU.gyroscopeAvailable() && IMU.magneticFieldAvailable()) {
-    IMU.readAcceleration(ax, ay, az);
-    IMU.readGyroscope(gx, gy, gz);
-    IMU.readMagneticField(mx, my, mz);
+    while (central.connected()) {
+      static unsigned long prevTime = 0;
+      unsigned long currentTime = millis();
+      float dt = (currentTime - prevTime) / 1000.0;  // 초 단위 시간 계산
+      prevTime = currentTime;
 
-    // 가속도계로 계산한 Roll, Pitch
-    float accelRoll = atan2(ay, az) * 180 / PI;
-    float accelPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180 / PI;
+      float ax, ay, az, gx, gy, gz, mx, my, mz;
 
-    // 자이로스코프 각속도
-    float gyroRollRate = gx; // 각속도 (°/s)
-    float gyroPitchRate = gy;
+      // IMU 데이터 읽기
+      if (IMU.accelerationAvailable() && IMU.gyroscopeAvailable() && IMU.magneticFieldAvailable()) {
+        IMU.readAcceleration(ax, ay, az);
+        IMU.readGyroscope(gx, gy, gz);
+        IMU.readMagneticField(mx, my, mz);
 
-    // 칼만 필터로 Roll, Pitch 계산
-    float roll = updateKalman(kalmanRoll, accelRoll, gyroRollRate, dt);
-    float pitch = updateKalman(kalmanPitch, accelPitch, gyroPitchRate, dt);
+        // Roll 및 Pitch 계산
+        float accelRoll = atan2(ay, az) * 180 / PI;
+        float accelPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180 / PI;
 
-    // 자기 센서 보정
-    float normMx = (mx - (magX_min + magX_max) / 2) / (magX_max - magX_min);
-    float normMy = (my - (magY_min + magY_max) / 2) / (magY_max - magY_min);
-    float normMz = (mz - (magZ_min + magZ_max) / 2) / (magZ_max - magZ_min);
+        float gyroRollRate = gx;  // 각속도 (°/s)
+        float gyroPitchRate = gy;
 
-    // Heading (방위각) 계산
-    float heading = atan2(-normMy, normMx) * 180 / PI;
-    if (heading < 0) heading += 360;
+        // 칼만 필터로 Roll, Pitch 계산
+        float roll = updateKalman(kalmanRoll, accelRoll, gyroRollRate, dt);
+        float pitch = updateKalman(kalmanPitch, accelPitch, gyroPitchRate, dt);
 
-    // 칫솔의 상태 분류
-    String posture;
-    if (roll >= -45 && roll < 45) {
-      posture = "BRUSH_DOWN";
-    } else if (roll >= 45 && roll < 135) {
-      posture = "BRUSH_LEFT";
-    } else if (roll >= -135 && roll < -45) {
-      posture = "BRUSH_RIGHT";
-    } else {
-      posture = "BRUSH_UP";
+        // 자기 센서 보정
+        float normMx = (mx - (magX_min + magX_max) / 2) / (magX_max - magX_min);
+        float normMy = (my - (magY_min + magY_max) / 2) / (magY_max - magY_min);
+
+        // Heading 계산
+        float heading = atan2(-normMy, normMx) * 180 / PI;
+        if (heading < 0) heading += 360;
+
+        // 자세 상태 분류
+        String posture;
+        if (roll >= -45 && roll < 45) {
+          posture = "BRUSH_DOWN";
+        } else if (roll >= 45 && roll < 135) {
+          posture = "BRUSH_LEFT";
+        } else if (roll >= -135 && roll < -45) {
+          posture = "BRUSH_RIGHT";
+        } else {
+          posture = "BRUSH_UP";
+        }
+
+        // Serial 및 BLE로 posture 데이터 전송
+        Serial.println("Posture: " + posture);
+        postureCharacteristic.writeValue(posture.c_str());
+      }
+
+      delay(100);  // 데이터 전송 주기
     }
 
-    // 결과 출력
-    Serial.print("Roll: ");
-    Serial.print(roll);
-    Serial.print("°, Pitch: ");
-    Serial.print(pitch);
-    Serial.print("°, Heading: ");
-    Serial.print(heading);
-    Serial.print("° -> Posture: ");
-    Serial.println(posture);
+    Serial.println("BLE device disconnected.");
   }
-
-  delay(10); // 10ms 주기로 데이터 수집
 }
