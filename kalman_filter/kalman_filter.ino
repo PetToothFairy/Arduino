@@ -133,6 +133,7 @@ void setup() {
   // initKalman(kalmanRoll);
   // initKalman(kalmanPitch);
 
+<<<<<<< HEAD
   calibrateSensors();
 
   Serial.println("Sensors initialized and calibrated.");
@@ -151,15 +152,12 @@ void loop() {
     IMU.readAcceleration(ax, ay, az);
     IMU.readGyroscope(gx, gy, gz);
     IMU.readMagneticField(mx, my, mz);
-
   //   // 보정값 갱신 (최소/최대값)
   //   if (mx < magX_min) magX_min = mx;
   //   if (mx > magX_max) magX_max = mx;
   //   if (my < magY_min) magY_min = my;
   //   if (my > magY_max) magY_max = my;
   //   if (mz < magZ_min) magZ_min = mz;
-  //   if (mz > magZ_max) magZ_max = mz;
-
   //   // 가속도계로 계산한 Roll, Pitch
   //   float accelRoll = atan2(ay, az) * 180 / PI;
   //   float accelPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180 / PI;
