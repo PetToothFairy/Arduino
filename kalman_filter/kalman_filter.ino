@@ -1,4 +1,5 @@
-#include <Arduino_LSM9DS1.h> // LSM9DS1 라이브러리
+//#include <Arduino_LSM9DS1.h> // LSM9DS1 라이브러리
+#include <Arduino_LSM6DSOX.h>
 
 // 자기 센서 보정을 위한 변수
 float magX_min = 9999, magX_max = -9999; // 초기값 설정
