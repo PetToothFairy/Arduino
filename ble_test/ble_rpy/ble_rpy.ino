@@ -20,7 +20,12 @@ float calculateYaw(float magX, float magY) {
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial);
+  
+  // Serial 연결 대기를 제한 시간으로 대체 (최대 3초)
+  unsigned long serialTimeout = millis();
+  while (!Serial && millis() - serialTimeout < 3000) {
+    // 디버깅 중에는 Serial 대기를 허용
+  }
 
   // IMU 초기화
   if (!IMU.begin()) {
