@@ -1,5 +1,4 @@
-#include <Arduino_BMI270_BMM150.h>
-//#include <Arduino_LSM9DS1.h>
+#include <Arduino_LSM9DS1.h> // BMI270 + BMM150 라이브러리
 #include <ArduinoBLE.h> // BLE 라이브러리
 
 float base_roll = 0, base_pitch = 0, base_yaw_x = 0, base_yaw_y = 0, base_yaw = 0; // 초깃값
@@ -9,19 +8,22 @@ bool isCalibrated = false;
 bool isStartInitialized = false;
 
 // BLE 서비스와 특성 정의
-BLEService toothbrushService("180F");
-BLEStringCharacteristic dataCharacteristic("2A19", BLERead | BLENotify, 128); // 데이터 전송용
-
+BLEService toothbrushService("789D");
+// BLEStringCharacteristic dataCharacteristic(
+//     UUID16("2A19"),          // 표준 16비트 UUID 사용
+//     BLERead | BLENotify,     // 읽기 및 알림 권한 설정
+//     128                      // 최대 문자열 길이
+// );
 void setup() {
   Serial.begin(9600);
   //while (!Serial);
 
   // IMU 초기화
-  if (!IMU.begin()) {
-    Serial.println("Failed to initialize IMU!");
-    while (1);
-  }
-  Serial.println("Sensors initialized.");
+  // if (!IMU.begin()) {
+  //   Serial.println("Failed to initialize IMU!");
+  //   while (1);
+  // }
+  // Serial.println("Sensors initialized.");
 
   // BLE 초기화
   if (!BLE.begin()) {
@@ -30,10 +32,10 @@ void setup() {
   }
 
   // BLE 장치 이름 설정 및 서비스 추가
-  BLE.setLocalName("ToothbrushSensor");
-  BLE.setAdvertisedService(toothbrushService);
-  toothbrushService.addCharacteristic(dataCharacteristic);
-  BLE.addService(toothbrushService);
+  BLE.setLocalName("abcd");
+  // toothbrushService.addCharacteristic(dataCharacteristic); // x
+  // BLE.setAdvertisedService(toothbrushService); // x
+  // BLE.addService(toothbrushService); // x
 
   // BLE 광고 시작
   BLE.advertise();
@@ -199,8 +201,8 @@ void loop() {
         Serial.println(yaw_diff);
 
               
-        // BLE를 통해 결과 전송
-        dataCharacteristic.writeValue(result);
+        // // BLE를 통해 결과 전송
+        // dataCharacteristic.writeValue(result);
       }
     }
       delay(10); // 10ms 주기로 데이터 수집  
